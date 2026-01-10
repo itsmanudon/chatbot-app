@@ -2,11 +2,11 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from .schemas import ChatRequest, ChatResponse, MemorySuggestion
-from .database import get_db, init_db
-from .llm_adapter import llm_adapter
-from .memory_engine import memory_engine
-from .vector_store import vector_store
+from schemas import ChatRequest, ChatResponse, MemorySuggestion
+from database import get_db, init_db
+from llm_adapter import llm_adapter
+from memory_engine import memory_engine
+from vector_store import vector_store
 import uuid
 
 app = FastAPI(

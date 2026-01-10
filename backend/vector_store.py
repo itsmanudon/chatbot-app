@@ -1,7 +1,5 @@
 import os
 from typing import List, Dict, Any
-from pinecone import Pinecone, ServerlessSpec
-from sentence_transformers import SentenceTransformer
 import uuid
 
 class VectorStore:
@@ -23,6 +21,9 @@ class VectorStore:
     def _initialize(self):
         """Initialize Pinecone and embedding model"""
         try:
+            from pinecone import Pinecone, ServerlessSpec
+            from sentence_transformers import SentenceTransformer
+            
             self.pc = Pinecone(api_key=self.api_key)
             self.embedding_model = SentenceTransformer(self.embedding_model_name)
             
