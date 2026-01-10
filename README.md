@@ -2,17 +2,46 @@
 
 A robust AI chatbot application with hybrid memory system combining PostgreSQL and Pinecone vector database.
 
-## Features
+## 🚀 Quick Start
 
-- **FastAPI Backend**: Modern, high-performance API with proper routing
-- **Multiple AI Providers**: Support for OpenAI and Anthropic (Claude)
+```bash
+# 1. Configure environment
+cd backend
+cp .env.example .env
+# Edit .env and add your API keys
+
+# 2. Start services
+cd ..
+docker-compose up --build
+
+# 3. Access the API
+# - API: http://localhost:8000
+# - Docs: http://localhost:8000/docs
+# - Frontend: http://localhost:3000
+```
+
+**See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.**
+
+## ✨ Features
+
+- **FastAPI Backend**: Modern, high-performance API with automatic documentation
+- **Multiple AI Providers**: Support for OpenAI and Anthropic (Claude) with easy extensibility
 - **Hybrid Memory System**: 
   - PostgreSQL for structured data storage
   - Pinecone for semantic vector search
 - **Context-Aware Conversations**: AI retrieves relevant context from past interactions
 - **Memory Suggestions**: Automatic detection and storage of user preferences and decisions
+- **Graceful Degradation**: Works without optional services (Pinecone)
+- **Minimalist Design**: ~600 lines of clean, maintainable code
 
-## Architecture
+## 📚 Documentation
+
+- **[QUICKSTART.md](QUICKSTART.md)**: Step-by-step setup guide
+- **[backend/ARCHITECTURE.md](backend/ARCHITECTURE.md)**: Detailed system architecture
+- **[example_usage.py](example_usage.py)**: Python example demonstrating API usage
+- **API Docs**: http://localhost:8000/docs (when running)
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────┐
@@ -138,6 +167,55 @@ Retrieve chat history for a session
 - FastAPI application setup
 - Chat endpoint with memory integration
 - Health checks and utility endpoints
+
+## 🔧 Development
+
+### Running Tests
+
+```bash
+cd backend
+
+# Validate structure and dependencies
+python validate.py
+
+# Integration tests
+python test_integration.py
+
+# API endpoint tests
+python test_api.py
+```
+
+### Local Development
+
+```bash
+cd backend
+./start.sh
+# Or manually:
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+## 📊 Project Stats
+
+- **Production Code**: ~600 lines
+- **Languages**: Python, TypeScript
+- **Framework**: FastAPI
+- **Databases**: PostgreSQL, Pinecone
+- **AI Providers**: OpenAI, Anthropic
+
+## 🛠️ Technology Stack
+
+**Backend:**
+- FastAPI 0.104.1
+- SQLAlchemy 2.0.23
+- PostgreSQL 16
+- Pinecone (vector database)
+- OpenAI / Anthropic APIs
+- Sentence Transformers (embeddings)
+
+**Frontend:**
+- Next.js / React
+- TypeScript
 
 ## Development
 
