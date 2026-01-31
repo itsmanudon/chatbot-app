@@ -141,7 +141,9 @@ class MemoryEngine:
                 f"Known {memory.memory_type}: {memory.content}"
             )
         
-        return "\n".join(context_parts[:limit])
+        # Deduplicate and return
+        unique_parts = list(set(context_parts))
+        return "\n\n".join(unique_parts[:limit])
     
     def get_session_history(
         self,

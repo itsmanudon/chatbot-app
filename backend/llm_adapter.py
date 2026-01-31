@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 
@@ -30,9 +33,16 @@ class OpenAIProvider(AIProvider):
         
         try:
             # Prepend context if available
+            # Prepend context if available
+            system_instruction = "You are a helpful AI assistant with long-term memory. Use the provided context to answer questions about previous interactions. If the context contains personal information about the user, assume it is true and use it to personalize your response."
+            
             if context:
                 messages = [
-                    {"role": "system", "content": f"Relevant context:\n{context}"}
+                    {"role": "system", "content": f"{system_instruction}\n\nRelevant Context/Memory:\n{context}"}
+                ] + messages
+            else:
+                 messages = [
+                    {"role": "system", "content": system_instruction}
                 ] + messages
             
             response = self.client.chat.completions.create(

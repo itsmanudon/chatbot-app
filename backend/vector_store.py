@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from typing import List, Dict, Any
 import uuid
 
@@ -9,29 +12,29 @@ class VectorStore:
         self.api_key = os.getenv("PINECONE_API_KEY")
         self.environment = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
         self.index_name = os.getenv("PINECONE_INDEX_NAME", "chatbot-memory")
-        self.embedding_model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        
+        # Model configuration
+        self.model_name = "llama-text-embed-v2"
+        self.output_dimension = 384
         
         self.pc = None
         self.index = None
-        self.embedding_model = None
         
         if self.api_key:
             self._initialize()
     
     def _initialize(self):
-        """Initialize Pinecone and embedding model"""
+        """Initialize Pinecone client"""
         try:
             from pinecone import Pinecone, ServerlessSpec
-            from sentence_transformers import SentenceTransformer
             
             self.pc = Pinecone(api_key=self.api_key)
-            self.embedding_model = SentenceTransformer(self.embedding_model_name)
             
             # Create index if it doesn't exist
             if self.index_name not in self.pc.list_indexes().names():
                 self.pc.create_index(
                     name=self.index_name,
-                    dimension=384,  # Dimension for all-MiniLM-L6-v2
+                    dimension=self.output_dimension,
                     metric="cosine",
                     spec=ServerlessSpec(cloud="aws", region=self.environment)
                 )
@@ -41,10 +44,30 @@ class VectorStore:
             print(f"Warning: Could not initialize Pinecone: {e}")
     
     def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text"""
-        if not self.embedding_model:
+        """Generate embedding using Pinecone Inference API (Matryoshka slicing)"""
+        if not self.pc:
             return []
-        return self.embedding_model.encode(text).tolist()
+            
+        try:
+            # Using Pinecone's Inference API for llama-text-embed-v2
+            # This model supports Matryoshka embeddings, so we can slice to 384
+            embeddings = self.pc.inference.embed(
+                model=self.model_name,
+                inputs=[text],
+                parameters={
+                    "input_type": "passage", 
+                    "truncate": "END"
+                }
+            )
+            
+            # Slice the embedding to the desired dimension (384)
+            # define full vectors then slice
+            full_vector = embeddings[0]['values']
+            return full_vector[:self.output_dimension]
+            
+        except Exception as e:
+            print(f"Error generating embedding: {e}")
+            return []
     
     def store_embedding(self, text: str, metadata: Dict[str, Any]) -> str:
         """Store text embedding in Pinecone"""
