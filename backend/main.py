@@ -25,10 +25,22 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-async def startup_event():
+    async def startup_event():
     """Initialize database on startup"""
-    init_db()
-    print("Database initialized")
+    try:
+        init_db()
+        print("Database initialized")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+    
+    # Debugging API Keys
+    import os
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        print(f"DEBUG: OPENAI_API_KEY found (starts with {openai_key[:7]}...)")
+    else:
+        print("DEBUG: OPENAI_API_KEY is Missing/None")
+
     print(f"Vector store available: {vector_store.is_available()}")
     print(f"LLM available: {llm_adapter.is_available()}")
 
