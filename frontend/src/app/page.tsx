@@ -54,7 +54,7 @@ export default function Home() {
       // Create a temporary ID for the AI response
       const aiTempId = (Date.now() + 1).toString();
 
-      const res = await axios.post('http://localhost:8000/chat', {
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/chat`, {
         message: userMessage.content,
         // Using a fixed session ID for demo purposes
         session_id: 'user-session-1'
