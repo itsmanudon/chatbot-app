@@ -3,15 +3,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sqlalchemy import create_engine, Column, String, Text, DateTime, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ai_user:ai_pass@localhost:5432/personal_ai")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"

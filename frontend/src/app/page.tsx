@@ -26,6 +26,15 @@ export default function Home() {
   ]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const sessionId = useRef<string>(
+    typeof window !== 'undefined'
+      ? (localStorage.getItem('chat_session_id') ?? (() => {
+          const id = crypto.randomUUID();
+          localStorage.setItem('chat_session_id', id);
+          return id;
+        })())
+      : 'ssr-session'
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -56,8 +65,7 @@ export default function Home() {
 
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/chat`, {
         message: userMessage.content,
-        // Using a fixed session ID for demo purposes
-        session_id: 'user-session-1'
+        session_id: sessionId.current
       });
 
       const aiReply = res.data.reply;

@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import List, Optional
-import uuid
 
 class ChatRequest(BaseModel):
     message: str

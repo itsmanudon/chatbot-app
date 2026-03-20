@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   backend:
     build:
@@ -10,16 +8,18 @@ services:
       - ./backend:/app
     depends_on:
       - db
+    env_file:
+      - ./backend/.env
     environment:
-      - DATABASE_URL=postgresql://ai_user:ai_pass@db:5432/personal_ai
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     restart: unless-stopped
 
   db:
     image: postgres:16
     environment:
-      POSTGRES_DB: personal_ai
-      POSTGRES_USER: ai_user
-      POSTGRES_PASSWORD: ai_pass
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -33,6 +33,9 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped

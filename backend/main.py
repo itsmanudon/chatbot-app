@@ -7,7 +7,6 @@ from database import get_db, init_db
 from llm_adapter import llm_adapter
 from memory_engine import memory_engine
 from vector_store import vector_store
-import uuid
 
 app = FastAPI(
     title="Personal AI Memory System",
@@ -25,7 +24,7 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-    async def startup_event():
+async def startup_event():
     """Initialize database on startup"""
     try:
         init_db()

@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime
 from database import ChatMessage, MemoryContext
 from vector_store import vector_store
 
