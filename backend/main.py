@@ -14,8 +14,13 @@ POST /chat
     an AI response, persists the exchange, and returns memory suggestions.
 POST /memory
     Manually store a typed memory context for a session.
+GET  /sessions
+    List all chat sessions with summary metadata (title, preview, count,
+    last-active timestamp).
 GET  /session/{session_id}/history
-    Retrieve the last 20 messages for a given session.
+    Retrieve the full interleaved conversation history for a given session.
+DELETE /session/{session_id}
+    Delete all messages and memory contexts for a session.
 
 Interactive API documentation is available at ``/docs`` (Swagger UI) and
 ``/redoc`` (ReDoc) when the backend is running.
@@ -25,11 +30,12 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from schemas import ChatRequest, ChatResponse, MemorySuggestion
+from schemas import ChatRequest, ChatResponse, MemorySuggestion, SessionSummary, ChatHistoryMessage
 from database import get_db, init_db
 from llm_adapter import llm_adapter
 from memory_engine import memory_engine
 from vector_store import vector_store
+from typing import List
 
 app = FastAPI(
     title="Personal AI Memory System",
@@ -173,20 +179,34 @@ async def store_memory(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/session/{session_id}/history")
-async def get_session_history(session_id: str, db: Session = Depends(get_db)):
-    """Get chat history for a session"""
+@app.get("/sessions", response_model=List[SessionSummary])
+async def list_sessions(db: Session = Depends(get_db)):
+    """List all chat sessions ordered by most recently active."""
     try:
-        history = memory_engine.get_session_history(
+        sessions = memory_engine.get_all_sessions(db=db)
+        return sessions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/session/{session_id}/history", response_model=List[ChatHistoryMessage])
+async def get_session_history(session_id: str, db: Session = Depends(get_db)):
+    """Get full interleaved chat history for a session (user + AI messages)."""
+    try:
+        history = memory_engine.get_full_session_history(
             db=db,
             session_id=session_id,
-            limit=20
+            limit=100
         )
-        
-        return {
-            "session_id": session_id,
-            "history": history
-        }
+        return history
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/session/{session_id}")
+async def delete_session(session_id: str, db: Session = Depends(get_db)):
+    """Delete all messages and memory contexts for a session."""
+    try:
+        deleted = memory_engine.delete_session(db=db, session_id=session_id)
+        return {"status": "success", "deleted_messages": deleted}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

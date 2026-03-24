@@ -11,10 +11,13 @@ Models
 - :class:`ChatRequest` — body for ``POST /chat``
 - :class:`MemorySuggestion` — a single memory hint embedded in chat responses
 - :class:`ChatResponse` — response body for ``POST /chat``
+- :class:`SessionSummary` — a brief summary of one chat session
+- :class:`ChatHistoryMessage` — a single message in a chat history response
 """
 
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from datetime import datetime
 
 class ChatRequest(BaseModel):
     """Request body for the ``POST /chat`` endpoint.
@@ -61,3 +64,35 @@ class ChatResponse(BaseModel):
 
     reply: str
     memory_suggestions: List[MemorySuggestion] = []
+
+class SessionSummary(BaseModel):
+    """A brief summary of a single chat session, used in the sessions list.
+
+    Attributes:
+        session_id: UUID v4 string identifying the session.
+        title: Truncated first user message used as a display title.
+        preview: Snippet of the most recent AI response.
+        message_count: Total number of exchanges stored for this session.
+        last_message_at: UTC timestamp of the most recent exchange.
+    """
+
+    session_id: str
+    title: str
+    preview: str
+    message_count: int
+    last_message_at: datetime
+
+class ChatHistoryMessage(BaseModel):
+    """A single message entry returned by the full history endpoint.
+
+    Attributes:
+        id: UUID of the ``ChatMessage`` row.
+        role: Either ``"user"`` or ``"ai"``.
+        content: The text of the message.
+        timestamp: UTC datetime when the exchange was stored.
+    """
+
+    id: str
+    role: str  # "user" or "ai"
+    content: str
+    timestamp: datetime
