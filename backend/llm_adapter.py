@@ -1,3 +1,46 @@
+"""
+llm_adapter.py
+--------------
+Provider-agnostic abstraction layer for LLM response generation.
+
+Architecture
+~~~~~~~~~~~~
+``AIProvider`` (abstract base class)
+    Defines the ``generate_response`` interface.  Concrete subclasses must
+    implement this method.
+
+``OpenAIProvider``
+    Wraps the OpenAI Python SDK.  Uses ``gpt-3.5-turbo`` with
+    ``temperature=0.7`` and ``max_tokens=500``.  Injects retrieved context as
+    a system message prepended to the conversation history.
+
+``AnthropicProvider``
+    Wraps the Anthropic Python SDK.  Uses ``claude-3-haiku-20240307`` with
+    ``max_tokens=500``.  Context is prepended to the ``system`` parameter of
+    the Messages API.
+
+``LLMAdapter``
+    Manages the two providers and exposes a unified ``get_response`` method.
+    The active provider is selected via the ``DEFAULT_AI_PROVIDER`` environment
+    variable (default ``"openai"``).  A different provider can be requested
+    per-call via the optional ``provider`` argument.
+
+Graceful degradation
+~~~~~~~~~~~~~~~~~~~~
+If the required API key is absent or the SDK fails to initialise,
+``is_available()`` returns ``False`` and ``generate_response`` returns a
+human-readable error string instead of raising an exception.
+
+Environment variables
+~~~~~~~~~~~~~~~~~~~~~
+``OPENAI_API_KEY``
+    Required for the OpenAI provider.
+``ANTHROPIC_API_KEY``
+    Required for the Anthropic provider.
+``DEFAULT_AI_PROVIDER``
+    ``"openai"`` (default) or ``"anthropic"``.
+"""
+
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -6,11 +49,26 @@ from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 
 class AIProvider(ABC):
-    """Abstract base class for AI providers"""
-    
+    """Abstract base class for AI providers.
+
+    All concrete providers must implement :meth:`generate_response`.
+    """
+
     @abstractmethod
     def generate_response(self, messages: List[Dict[str, str]], context: str = "") -> str:
-        """Generate a response from the AI provider"""
+        """Generate an AI response for the given message history.
+
+        Args:
+            messages: Conversation history as a list of
+                ``{"role": str, "content": str}`` dicts.  The latest user
+                message must be the last item.
+            context: Optional context string assembled by the memory engine.
+                Injected into the system prompt so the model can personalise
+                its response.
+
+        Returns:
+            The model's reply as a plain string.
+        """
         pass
 
 class OpenAIProvider(AIProvider):
@@ -99,23 +157,52 @@ class AnthropicProvider(AIProvider):
             return f"Error generating response from Anthropic: {str(e)}"
 
 class LLMAdapter:
-    """Main adapter for managing multiple AI providers"""
-    
+    """Unified adapter managing multiple AI providers.
+
+    A single global instance (``llm_adapter``) is created at module import
+    time.  Import and use that instance rather than instantiating this class
+    directly.
+
+    Attributes:
+        providers: Dict mapping provider name strings to initialised provider
+            objects (``"openai"`` and ``"anthropic"``).
+        default_provider: Provider name used when ``get_response`` is called
+            without an explicit ``provider`` argument.
+    """
+
     def __init__(self):
         self.providers = {
             "openai": OpenAIProvider(),
             "anthropic": AnthropicProvider()
         }
         self.default_provider = os.getenv("DEFAULT_AI_PROVIDER", "openai")
-    
+
     def get_response(
-        self, 
-        message: str, 
-        context: str = "", 
+        self,
+        message: str,
+        context: str = "",
         provider: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> str:
-        """Get response from AI provider with context"""
+        """Generate a response from the configured AI provider.
+
+        Appends *message* to *conversation_history* and delegates to the
+        selected provider's ``generate_response`` method.
+
+        Args:
+            message: The user's latest message.
+            context: Memory context string from the memory engine (may be
+                empty).
+            provider: Override the default provider for this call.  Must be
+                one of ``"openai"`` or ``"anthropic"``.  Falls back to
+                ``self.default_provider`` when ``None``.
+            conversation_history: Prior messages as
+                ``[{"role": "user", "content": "..."}, ...]``.  Defaults to
+                an empty list.
+
+        Returns:
+            The AI-generated reply string.
+        """
         provider_name = provider or self.default_provider
         
         if provider_name not in self.providers:
@@ -128,7 +215,15 @@ class LLMAdapter:
         return self.providers[provider_name].generate_response(messages, context)
     
     def is_available(self, provider: Optional[str] = None) -> bool:
-        """Check if a provider is available"""
+        """Return ``True`` if the selected provider was successfully initialised.
+
+        Args:
+            provider: Provider name to check.  Defaults to
+                ``self.default_provider``.
+
+        Returns:
+            ``True`` when the provider's client object is not ``None``.
+        """
         provider_name = provider or self.default_provider
         
         if provider_name not in self.providers:

@@ -1,3 +1,39 @@
+"""
+memory_engine.py
+----------------
+Hybrid memory orchestration layer combining PostgreSQL and Pinecone.
+
+The ``MemoryEngine`` class is the single point of contact between the FastAPI
+routes and the two persistence layers.  It exposes four operations:
+
+store_chat_message
+    Persists a user/AI exchange to PostgreSQL and, when available, embeds the
+    combined text into Pinecone for future semantic search.
+
+store_memory_context
+    Persists an extracted memory (preference, belief, decision) to PostgreSQL
+    and Pinecone with a confidence score.
+
+retrieve_relevant_context
+    Builds a context string for the LLM by combining three sources:
+
+    1. **Semantic search** (Pinecone) — top-k most similar past messages and
+       memories for the current query.
+    2. **Recent messages** (PostgreSQL) — the 3 most recent exchanges in the
+       session, regardless of semantic relevance.
+    3. **High-confidence memories** (PostgreSQL) — stored memories with
+       ``confidence ≥ 0.7``.
+
+    Duplicate entries are deduplicated before returning.
+
+get_session_history
+    Returns the N most recent user messages in a session formatted as the
+    ``[{"role": "user", "content": "..."}]`` list expected by the LLM adapter.
+
+A single global instance (``memory_engine``) is created at module import
+time and shared across all requests.
+"""
+
 import uuid
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -6,19 +42,40 @@ from database import ChatMessage, MemoryContext
 from vector_store import vector_store
 
 class MemoryEngine:
-    """Hybrid memory system combining PostgreSQL and Pinecone"""
-    
+    """Hybrid memory system combining PostgreSQL and Pinecone.
+
+    All methods require a SQLAlchemy ``Session`` obtained via the
+    ``get_db`` FastAPI dependency.  Pinecone operations are gated behind
+    ``self.vector_store.is_available()`` so the engine degrades gracefully
+    to PostgreSQL-only mode when Pinecone is not configured.
+    """
+
     def __init__(self):
         self.vector_store = vector_store
     
     def store_chat_message(
-        self, 
-        db: Session, 
-        session_id: str, 
-        message: str, 
+        self,
+        db: Session,
+        session_id: str,
+        message: str,
         response: str
     ) -> str:
-        """Store chat message in both PostgreSQL and Pinecone"""
+        """Persist a user/AI exchange to PostgreSQL (and Pinecone if available).
+
+        The combined ``"<message> <response>"`` string is embedded and stored
+        in Pinecone so it can be retrieved by semantic similarity in future
+        turns.  The returned ``vector_id`` is also saved in the SQL row for
+        cross-referencing.
+
+        Args:
+            db: Active SQLAlchemy session.
+            session_id: UUID identifying the conversation.
+            message: The user's message text.
+            response: The AI-generated reply text.
+
+        Returns:
+            The UUID string of the new ``ChatMessage`` row.
+        """
         chat_id = str(uuid.uuid4())
         
         # Store embedding in Pinecone if available
@@ -58,7 +115,21 @@ class MemoryEngine:
         memory_type: str,
         confidence: float
     ) -> str:
-        """Store memory context in both PostgreSQL and Pinecone"""
+        """Persist an extracted memory to PostgreSQL (and Pinecone if available).
+
+        Args:
+            db: Active SQLAlchemy session.
+            session_id: UUID identifying the conversation this memory belongs to.
+            content: Human-readable description of the memory.
+            memory_type: One of ``"preference"``, ``"belief"``, or
+                ``"decision"``.
+            confidence: Float in ``[0.0, 1.0]`` indicating certainty.
+                Memories with ``confidence ≥ 0.7`` are injected into future
+                LLM context.
+
+        Returns:
+            The UUID string of the new ``MemoryContext`` row.
+        """
         memory_id = str(uuid.uuid4())
         
         # Store embedding in Pinecone if available
@@ -96,7 +167,29 @@ class MemoryEngine:
         session_id: str,
         limit: int = 5
     ) -> str:
-        """Hybrid retrieval: combine vector search and SQL queries"""
+        """Build a context string for the LLM using hybrid retrieval.
+
+        Combines three sources (deduplicating across all of them):
+
+        1. **Pinecone semantic search** — top ``limit`` vectors most similar
+           to *query*, scoped to *session_id*.
+        2. **Recent SQL messages** — the 3 most recent ``ChatMessage`` rows
+           for *session_id*, added regardless of semantic relevance.
+        3. **High-confidence SQL memories** — up to 3 ``MemoryContext`` rows
+           for *session_id* where ``confidence ≥ 0.7``.
+
+        Args:
+            db: Active SQLAlchemy session.
+            query: The user's current message, used as the semantic search
+                query.
+            session_id: UUID scoping all lookups to a single conversation.
+            limit: Maximum total context items to return (default 5).
+
+        Returns:
+            A newline-separated string of context fragments ready to be
+            injected into the LLM system prompt, or an empty string when no
+            relevant context is found.
+        """
         context_parts = []
         
         # 1. Vector search for semantic similarity
@@ -151,7 +244,22 @@ class MemoryEngine:
         session_id: str,
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """Get recent chat history for a session"""
+        """Return the most recent user messages for *session_id*.
+
+        The result is formatted as a list of ``{"role": "user", "content":
+        "..."}`` dicts, compatible with both the OpenAI and Anthropic message
+        schemas.  Only the user-side of each exchange is included; the AI
+        replies are omitted because the LLM adapter prepends them via the
+        context string.
+
+        Args:
+            db: Active SQLAlchemy session.
+            session_id: UUID identifying the conversation.
+            limit: Maximum number of messages to return (default 10).
+
+        Returns:
+            List of message dicts ordered oldest-first, up to *limit* entries.
+        """
         messages = db.query(ChatMessage).filter(
             ChatMessage.session_id == session_id
         ).order_by(

@@ -10,12 +10,26 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** A single message bubble displayed in the chat history. */
 interface Message {
+  /** Determines bubble style and avatar: user messages appear on the right. */
   role: 'user' | 'ai';
+  /** Raw text content of the message. Whitespace is preserved. */
   content: string;
+  /** Unique key used by React's list reconciler. */
   id: string;
 }
 
+/**
+ * Main chat interface page.
+ *
+ * Manages a conversation with the AI backend:
+ * - Reads (or creates) a UUID session ID from `localStorage` so history
+ *   persists across page refreshes.
+ * - Sends user messages to `POST /chat` and appends the AI reply.
+ * - Displays a typing indicator while waiting for the backend response.
+ * - Shows an error message when the backend is unreachable.
+ */
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
