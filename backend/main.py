@@ -1,3 +1,26 @@
+"""
+main.py
+-------
+FastAPI application entry point for the Personal AI Memory System.
+
+Endpoints
+---------
+GET  /
+    Root endpoint — returns API name, status, and dependency availability.
+GET  /health
+    Lightweight health check — returns LLM and vector store availability.
+POST /chat
+    Main conversational endpoint.  Retrieves hybrid memory context, generates
+    an AI response, persists the exchange, and returns memory suggestions.
+POST /memory
+    Manually store a typed memory context for a session.
+GET  /session/{session_id}/history
+    Retrieve the last 20 messages for a given session.
+
+Interactive API documentation is available at ``/docs`` (Swagger UI) and
+``/redoc`` (ReDoc) when the backend is running.
+"""
+
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError

@@ -1,3 +1,42 @@
+"""
+vector_store.py
+---------------
+Pinecone vector database integration for semantic memory retrieval.
+
+The ``VectorStore`` class wraps the Pinecone client and provides three
+operations used by the memory engine:
+
+1. **Generate embeddings** — converts raw text into a 384-dimensional
+   floating-point vector using the ``llama-text-embed-v2`` model via
+   Pinecone's Inference API.  The model natively produces larger vectors;
+   Matryoshka slicing is used to truncate to 384 dimensions.
+
+2. **Store embeddings** — upserts a ``(id, vector, metadata)`` tuple into
+   the Pinecone index.  Metadata includes ``session_id``, ``type``
+   (``"chat"`` or ``"memory"``), and the original text fields, enabling
+   filtered retrieval.
+
+3. **Search similar** — queries the index with a new embedding and returns
+   the top-k most similar records, optionally filtered by ``session_id`` so
+   that each conversation only retrieves its own history.
+
+Graceful degradation
+~~~~~~~~~~~~~~~~~~~~
+If ``PINECONE_API_KEY`` is not set, or if the Pinecone client cannot be
+initialised, ``is_available()`` returns ``False`` and all methods return
+empty results.  The rest of the application falls back to PostgreSQL-only
+memory retrieval.
+
+Environment variables
+~~~~~~~~~~~~~~~~~~~~~
+``PINECONE_API_KEY``
+    Required to enable Pinecone integration.
+``PINECONE_ENVIRONMENT``
+    AWS region of the serverless index (default: ``us-east-1``).
+``PINECONE_INDEX_NAME``
+    Name of the index to create/use (default: ``chatbot-memory``).
+"""
+
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -6,7 +45,12 @@ from typing import List, Dict, Any
 import uuid
 
 class VectorStore:
-    """Pinecone vector database integration for embeddings"""
+    """Pinecone vector database integration for embeddings.
+
+    A single global instance (``vector_store``) is created at module import
+    time.  All other modules should import and use that instance rather than
+    instantiating this class directly.
+    """
     
     def __init__(self):
         self.api_key = os.getenv("PINECONE_API_KEY")
@@ -24,7 +68,13 @@ class VectorStore:
             self._initialize()
     
     def _initialize(self):
-        """Initialize Pinecone client"""
+        """Initialize the Pinecone client and ensure the index exists.
+
+        Creates a serverless index with cosine similarity metric if one with
+        ``self.index_name`` does not already exist.  Any exception during
+        initialisation is caught and printed; ``self.index`` remains ``None``
+        so ``is_available()`` returns ``False``.
+        """
         try:
             from pinecone import Pinecone, ServerlessSpec
             
@@ -44,7 +94,20 @@ class VectorStore:
             print(f"Warning: Could not initialize Pinecone: {e}")
     
     def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding using Pinecone Inference API (Matryoshka slicing)"""
+        """Generate a 384-dimensional embedding for *text*.
+
+        Uses the Pinecone Inference API with the ``llama-text-embed-v2``
+        model.  The model supports Matryoshka Representation Learning, so the
+        full vector is sliced to ``self.output_dimension`` (384) without
+        retraining.
+
+        Args:
+            text: The input string to embed.
+
+        Returns:
+            A list of 384 floats, or an empty list if Pinecone is unavailable
+            or an error occurs.
+        """
         if not self.pc:
             return []
             
@@ -70,7 +133,18 @@ class VectorStore:
             return []
     
     def store_embedding(self, text: str, metadata: Dict[str, Any]) -> str:
-        """Store text embedding in Pinecone"""
+        """Embed *text* and upsert the vector into the Pinecone index.
+
+        Args:
+            text: Raw text to embed (e.g. a concatenated message + response).
+            metadata: Arbitrary key/value pairs stored alongside the vector
+                for filtered retrieval.  At minimum, should contain
+                ``session_id`` and ``type`` (``"chat"`` or ``"memory"``).
+
+        Returns:
+            The UUID string of the upserted vector, or an empty string if
+            Pinecone is unavailable or the embedding could not be generated.
+        """
         if not self.index:
             return ""
         
@@ -83,7 +157,25 @@ class VectorStore:
         return vector_id
     
     def search_similar(self, query: str, top_k: int = 5, filter: Dict = None) -> List[Dict]:
-        """Search for similar embeddings"""
+        """Retrieve the most semantically similar vectors for *query*.
+
+        Args:
+            query: Natural-language query string to search with.
+            top_k: Maximum number of results to return (default 5).
+            filter: Optional Pinecone metadata filter dict, e.g.
+                ``{"session_id": "abc-123"}`` to restrict results to a single
+                conversation.
+
+        Returns:
+            A list of dicts, each with keys:
+
+            - ``id`` (str): The Pinecone vector ID.
+            - ``score`` (float): Cosine similarity score (higher = more similar).
+            - ``metadata`` (dict): The metadata stored alongside the vector.
+
+            Returns an empty list if Pinecone is unavailable or the query
+            embedding could not be generated.
+        """
         if not self.index:
             return []
         
@@ -108,7 +200,7 @@ class VectorStore:
         ]
     
     def is_available(self) -> bool:
-        """Check if vector store is available"""
+        """Return ``True`` if the Pinecone index was successfully initialised."""
         return self.index is not None
 
 # Global instance
