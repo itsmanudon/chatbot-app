@@ -41,6 +41,11 @@ from datetime import datetime
 from database import ChatMessage, MemoryContext
 from vector_store import vector_store
 
+# Maximum length of the session title (first user message, truncated)
+_TITLE_MAX_LENGTH = 60
+# Maximum length of the session preview (most recent AI response, truncated)
+_PREVIEW_MAX_LENGTH = 80
+
 class MemoryEngine:
     """Hybrid memory system combining PostgreSQL and Pinecone.
 
@@ -273,6 +278,140 @@ class MemoryEngine:
             }
             for msg in reversed(messages)
         ]
+
+    def get_full_session_history(
+        self,
+        db: Session,
+        session_id: str,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Return the full conversation history for *session_id*, interleaved.
+
+        Each exchange row in the database is expanded into two message dicts —
+        one for the user turn and one for the AI turn — preserving the
+        chronological order.
+
+        Args:
+            db: Active SQLAlchemy session.
+            session_id: UUID identifying the conversation.
+            limit: Maximum number of exchange *rows* to fetch (default 100).
+                The returned list may contain up to ``2 * limit`` entries.
+
+        Returns:
+            List of message dicts ordered oldest-first, each with keys
+            ``id``, ``role`` (``"user"`` or ``"ai"``), ``content``, and
+            ``timestamp``.
+        """
+        rows = db.query(ChatMessage).filter(
+            ChatMessage.session_id == session_id
+        ).order_by(
+            ChatMessage.timestamp.asc()
+        ).limit(limit).all()
+
+        result: List[Dict[str, Any]] = []
+        for row in rows:
+            result.append({
+                "id": f"{row.id}-user",
+                "role": "user",
+                "content": row.message,
+                "timestamp": row.timestamp,
+            })
+            result.append({
+                "id": f"{row.id}-ai",
+                "role": "ai",
+                "content": row.response,
+                "timestamp": row.timestamp,
+            })
+        return result
+
+    def get_all_sessions(
+        self,
+        db: Session,
+    ) -> List[Dict[str, Any]]:
+        """Return a summary list of all distinct chat sessions.
+
+        For each unique ``session_id`` found in ``chat_messages`` the method
+        returns the first user message (used as the display title), a snippet
+        of the most recent AI response (preview), the total number of exchange
+        rows, and the timestamp of the most recent row.
+
+        Args:
+            db: Active SQLAlchemy session.
+
+        Returns:
+            List of session summary dicts ordered most-recently-active first,
+            each containing ``session_id``, ``title``, ``preview``,
+            ``message_count``, and ``last_message_at``.
+        """
+        from sqlalchemy import func
+
+        # Aggregate per session: count, latest timestamp
+        agg = (
+            db.query(
+                ChatMessage.session_id,
+                func.count(ChatMessage.id).label("message_count"),
+                func.max(ChatMessage.timestamp).label("last_message_at"),
+            )
+            .group_by(ChatMessage.session_id)
+            .all()
+        )
+
+        sessions = []
+        for row in agg:
+            # First message (title)
+            first = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.session_id == row.session_id)
+                .order_by(ChatMessage.timestamp.asc())
+                .first()
+            )
+            # Most recent message (preview)
+            last = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.session_id == row.session_id)
+                .order_by(ChatMessage.timestamp.desc())
+                .first()
+            )
+
+            title = (first.message[:_TITLE_MAX_LENGTH] + "…") if first and len(first.message) > _TITLE_MAX_LENGTH else (first.message if first else "New Chat")
+            preview = (last.response[:_PREVIEW_MAX_LENGTH] + "…") if last and len(last.response) > _PREVIEW_MAX_LENGTH else (last.response if last else "")
+
+            sessions.append({
+                "session_id": row.session_id,
+                "title": title,
+                "preview": preview,
+                "message_count": row.message_count,
+                "last_message_at": row.last_message_at,
+            })
+
+        # Most recent first
+        sessions.sort(key=lambda s: s["last_message_at"], reverse=True)
+        return sessions
+
+    def delete_session(
+        self,
+        db: Session,
+        session_id: str,
+    ) -> int:
+        """Delete all messages and memory contexts for *session_id*.
+
+        Args:
+            db: Active SQLAlchemy session.
+            session_id: UUID of the session to remove.
+
+        Returns:
+            The number of ``ChatMessage`` rows deleted.
+        """
+        deleted = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id)
+            .delete(synchronize_session=False)
+        )
+        db.query(MemoryContext).filter(
+            MemoryContext.session_id == session_id
+        ).delete(synchronize_session=False)
+        db.commit()
+        return deleted
 
 # Global instance
 memory_engine = MemoryEngine()

@@ -155,9 +155,37 @@ curl -X POST "http://localhost:8000/memory" \
 
 ---
 
+### `GET /sessions`
+
+Returns a summary list of all chat sessions, ordered most-recently-active first.
+
+**Response**
+```json
+[
+  {
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "How do I implement a binary search?",
+    "preview": "Binary search works by repeatedly dividing the search interval…",
+    "message_count": 4,
+    "last_message_at": "2024-03-24T14:32:00"
+  }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | string | UUID identifying the session |
+| `title` | string | First user message (truncated to 60 chars) |
+| `preview` | string | Most recent AI response snippet (80 chars) |
+| `message_count` | int | Number of stored exchanges |
+| `last_message_at` | datetime | UTC timestamp of the most recent exchange |
+
+---
+
 ### `GET /session/{session_id}/history`
 
-Returns the last 20 messages for a session.
+Returns the full interleaved conversation history for a session (both user
+and AI turns), ordered oldest-first.
 
 **Path parameter**
 
@@ -167,12 +195,33 @@ Returns the last 20 messages for a session.
 
 **Response**
 ```json
+[
+  {
+    "id": "7c9e6679-...-user",
+    "role": "user",
+    "content": "Hello! I'm learning Python.",
+    "timestamp": "2024-03-24T14:30:00"
+  },
+  {
+    "id": "7c9e6679-...-ai",
+    "role": "ai",
+    "content": "Great! Python is an excellent language to start with.",
+    "timestamp": "2024-03-24T14:30:00"
+  }
+]
+```
+
+---
+
+### `DELETE /session/{session_id}`
+
+Deletes all messages and memory contexts for a session.
+
+**Response**
+```json
 {
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "history": [
-    { "role": "user", "content": "Hello! I'm learning Python." },
-    { "role": "user", "content": "What's the best way to learn FastAPI?" }
-  ]
+  "status": "success",
+  "deleted_messages": 4
 }
 ```
 

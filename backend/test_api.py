@@ -53,6 +53,39 @@ def test_chat_endpoint_structure():
     # May fail due to DB not being available, but that's expected
     print(f"  ✓ Chat endpoint accepts valid request structure (status: {response.status_code})")
 
+def test_sessions_endpoint():
+    """Test the sessions list endpoint"""
+    print("\n📋 Testing sessions endpoint...")
+    response = client.get("/sessions")
+    # Should succeed with empty list (no data in SQLite test DB)
+    # May return 500 if DB tables not initialized, but should not 404
+    assert response.status_code in [200, 500]
+    if response.status_code == 200:
+        data = response.json()
+        assert isinstance(data, list)
+    print(f"  ✓ Sessions endpoint reachable (status: {response.status_code})")
+
+def test_session_history_endpoint():
+    """Test the session history endpoint"""
+    print("\n🕑 Testing session history endpoint...")
+    response = client.get("/session/test-session-123/history")
+    assert response.status_code in [200, 500]
+    if response.status_code == 200:
+        data = response.json()
+        assert isinstance(data, list)
+    print(f"  ✓ Session history endpoint reachable (status: {response.status_code})")
+
+def test_delete_session_endpoint():
+    """Test the delete session endpoint"""
+    print("\n🗑️ Testing delete session endpoint...")
+    response = client.delete("/session/nonexistent-session")
+    assert response.status_code in [200, 500]
+    if response.status_code == 200:
+        data = response.json()
+        assert data["status"] == "success"
+    print(f"  ✓ Delete session endpoint reachable (status: {response.status_code})")
+
+
 def main():
     """Run all endpoint tests"""
     print("=" * 60)
@@ -63,6 +96,9 @@ def main():
         test_root_endpoint()
         test_health_endpoint()
         test_chat_endpoint_structure()
+        test_sessions_endpoint()
+        test_session_history_endpoint()
+        test_delete_session_endpoint()
         
         print("\n" + "=" * 60)
         print("✅ API ENDPOINT TESTS PASSED!")

@@ -15,7 +15,8 @@ def test_schemas():
     """Test schema definitions"""
     print("📋 Testing schemas...")
     try:
-        from schemas import ChatRequest, ChatResponse, MemorySuggestion
+        from schemas import ChatRequest, ChatResponse, MemorySuggestion, SessionSummary, ChatHistoryMessage
+        from datetime import datetime
         
         # Test ChatRequest
         request = ChatRequest(
@@ -43,6 +44,28 @@ def test_schemas():
         assert response.reply == "Hello!"
         assert len(response.memory_suggestions) == 1
         print("  ✓ ChatResponse schema works")
+
+        # Test SessionSummary
+        now = datetime.utcnow()
+        summary = SessionSummary(
+            session_id="abc-123",
+            title="Hello, world!",
+            preview="I can help you.",
+            message_count=5,
+            last_message_at=now,
+        )
+        assert summary.message_count == 5
+        print("  ✓ SessionSummary schema works")
+
+        # Test ChatHistoryMessage
+        hist_msg = ChatHistoryMessage(
+            id="msg-1",
+            role="user",
+            content="Hello",
+            timestamp=now,
+        )
+        assert hist_msg.role == "user"
+        print("  ✓ ChatHistoryMessage schema works")
         
         return True
     except Exception as e:
@@ -124,6 +147,9 @@ def test_memory_engine_structure():
         assert hasattr(engine, 'store_chat_message')
         assert hasattr(engine, 'store_memory_context')
         assert hasattr(engine, 'retrieve_relevant_context')
+        assert hasattr(engine, 'get_full_session_history')
+        assert hasattr(engine, 'get_all_sessions')
+        assert hasattr(engine, 'delete_session')
         print("  ✓ MemoryEngine instantiated")
         
         return True
@@ -146,6 +172,9 @@ def test_fastapi_app():
         assert "/" in routes
         assert "/health" in routes
         assert "/chat" in routes
+        assert "/sessions" in routes
+        assert "/session/{session_id}/history" in routes
+        assert "/session/{session_id}" in routes
         print("  ✓ Required routes defined")
         
         return True
