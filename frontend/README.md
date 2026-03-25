@@ -107,4 +107,3 @@ list on mount and after each message exchange.  When a session is selected:
 | `tailwindcss` | Utility-first CSS framework |
 | `lucide-react` | Icon library (Send, Bot, User, Loader2, Sparkles, PlusCircle, MessageSquare, Trash2, Menu, X) |
 | `clsx` + `tailwind-merge` | Conditional className composition |
-

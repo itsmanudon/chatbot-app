@@ -13,6 +13,9 @@ dependencies = [
     "pydantic==2.7.0",
     "python-dotenv==1.0.1",
     "sentence-transformers==2.2.2",
+    "alembic>=1.13.0",
+    "tenacity>=8.2.0",
+    "slowapi>=0.1.9",
     "sqlalchemy==2.0.23",
     "uvicorn==0.30.1",
 ]

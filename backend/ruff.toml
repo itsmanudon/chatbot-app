@@ -1,0 +1,10 @@
+# ruff.toml — linting config for the backend
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "UP"]  # pycodestyle, pyflakes, warnings, isort, pyupgrade
+ignore = [
+    "E501",  # line length handled by black
+    "E402",  # module-level import not at top — intentional: load_dotenv() must run first
+]

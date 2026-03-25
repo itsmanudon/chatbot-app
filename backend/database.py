@@ -29,20 +29,32 @@ Call ``init_db()`` once at application startup to create all tables.
 """
 
 import os
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from sqlalchemy import create_engine, Column, String, Text, DateTime, Float
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from datetime import datetime
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ai_user:ai_pass@localhost:5432/personal_ai")
+from sqlalchemy import Column, DateTime, Float, String, Text, create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-engine = create_engine(DATABASE_URL)
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://ai_user:ai_pass@localhost:5432/personal_ai"
+)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,  # reconnect automatically after DB restarts
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 class Base(DeclarativeBase):
     pass
+
 
 class ChatMessage(Base):
     """Persisted record of a single user/AI message exchange.
@@ -66,6 +78,7 @@ class ChatMessage(Base):
     response = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
     vector_id = Column(String, nullable=True)  # Reference to Pinecone vector
+
 
 class MemoryContext(Base):
     """An extracted fact or preference about the user within a session.
@@ -101,13 +114,26 @@ class MemoryContext(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     vector_id = Column(String, nullable=True)
 
-def init_db():
-    """Create all database tables if they do not already exist.
 
-    Called once during FastAPI's ``startup`` event.  Safe to call multiple
-    times — SQLAlchemy's ``create_all`` is idempotent.
+def init_db():
+    """Run Alembic migrations to bring the database schema up to date.
+
+    Uses ``alembic upgrade head`` programmatically so the app always starts
+    with the latest schema.  Falls back to ``create_all`` if Alembic is not
+    available (e.g. in lightweight test environments).
     """
-    Base.metadata.create_all(bind=engine)
+    try:
+        import os
+
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "alembic.ini"))
+        command.upgrade(alembic_cfg, "head")
+    except Exception:
+        # Fallback for test environments that don't have a full Alembic setup
+        Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     """FastAPI dependency that yields a scoped SQLAlchemy session.
