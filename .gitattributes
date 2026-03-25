@@ -1,0 +1,39 @@
+# Normalize line endings to LF in the repo; each OS checks out its native ending.
+* text=auto
+
+# Always LF for these — CRLF will break them on any OS
+*.sh        text eol=lf
+*.py        text eol=lf
+Dockerfile  text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.toml      text eol=lf
+*.ini       text eol=lf
+*.cfg       text eol=lf
+*.env       text eol=lf
+*.env.*     text eol=lf
+Makefile    text eol=lf
+
+# Frontend source — LF everywhere to match Prettier config
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.json      text eol=lf
+*.css       text eol=lf
+*.mjs       text eol=lf
+*.mts       text eol=lf
+
+# Docs
+*.md        text eol=lf
+
+# Binary files — no line ending conversion
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.eot       binary
