@@ -61,3 +61,6 @@ build/
 # Models cache
 models/
 .cache/
+
+# Pem Key
+*.pem
